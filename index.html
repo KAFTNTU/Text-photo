@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>TestShot fixed manual column fixed</title>
+<title>TestShot answer fixed answer fixed fixed</title>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <style>
@@ -213,7 +213,7 @@ canvas,
         </div>
         <label class="check"><input id="answerInFileName" type="checkbox" checked>Писати відповідь у назві файлу</label>
         <label class="check"><input id="detectCorrectWord" type="checkbox" checked>Відповідь по слову “правильно”</label>
-        <label class="check"><input id="detectUnderline" type="checkbox" checked>Відповідь по підкресленню</label>
+        <label class="check"><input id="detectUnderline" type="checkbox" checked>Відповідь по підкресленню</label><div class="small">Підкреслення має пріоритет над словом “правильно”.</div>
       </div>
       <div class="field" style="margin-top:8px"><label>Видаляти службові рядки</label><textarea id="ignoredLines" style="min-height:90px">Базовий рівень
 Середній рівень
@@ -379,7 +379,7 @@ function getSettings(){
 
 function detectQuestionStart(line){
   const t = String(line||'').trim();
-  return /^\d{1,5}\s*[\)\.\:\-–]\s*\S/.test(t) || /^(питання|запитання|question|№)\s*\.?\s*\d{1,5}\b/i.test(t);
+  return /^\d{1,5}\s*[).:–-]\s*\S/.test(t) || /^(питання|запитання|question|№)\s*\.?\s*\d{1,5}\b/i.test(t);
 }
 function splitQuestions(text, mode){
   const src = String(text||'').replace(/\r\n/g,'\n').replace(/\u00A0/g,' ').trim();
@@ -401,16 +401,16 @@ function splitQuestions(text, mode){
 
 function stripQuestionNumber(text){
   let s = String(text||'').trim();
-  s = s.replace(/^\s*\d{1,5}\s*[\)\.\:\-–]\s*/,'');
-  s = s.replace(/^\s*(питання|запитання|question|№)\s*\.?\s*\d{1,5}\s*[\:\.\-–]?\s*/i,'');
+  s = s.replace(/^\s*\d{1,5}\s*[).:–-]\s*/,'');
+  s = s.replace(/^\s*(питання|запитання|question|№)\s*\.?\s*\d{1,5}\s*[\:\.–-]?\s*/i,'');
   return s.trim();
 }
 function splitTitleBody(q, index, s){
   const raw = String(q||'').trim();
   const first = raw.split('\n')[0] || '';
   let titleFromText = '';
-  const m1 = first.match(/^\s*(\d{1,5})\s*[\)\.\:\-–]\s*(.*)$/);
-  const m2 = first.match(/^\s*((?:питання|запитання|question|№)\s*\.?\s*\d{1,5})\s*[\:\.\-–]?\s*(.*)$/i);
+  const m1 = first.match(/^\s*(\d{1,5})\s*[).:–-]\s*(.*)$/);
+  const m2 = first.match(/^\s*((?:питання|запитання|question|№)\s*\.?\s*\d{1,5})\s*[\:\.–-]?\s*(.*)$/i);
   let body = raw;
   if(m1){ titleFromText='Запитання '+m1[1]; body=[m1[2], ...raw.split('\n').slice(1)].join('\n').trim(); }
   else if(m2){ titleFromText=m2[1]; body=[m2[2], ...raw.split('\n').slice(1)].join('\n').trim(); }
@@ -435,7 +435,7 @@ function removeIgnoredLines(text, ignored){
 }
 function lineAnswerLetter(line){
   const t = stripUnderlineMarkersForLogic(line);
-  const m = String(t||'').match(/^\s*([А-ЯA-ZІЇЄҐ])\s*[\)\.\:\-–]/i);
+  const m = String(t||'').match(/^\s*([А-ЯA-ZІЇЄҐ])\s*[).:–-]/i);
   return m ? normalizeAnswerLabel(m[1]) : '';
 }
 function findUnderlineAnswer(text){
@@ -453,13 +453,36 @@ function findUnderlineAnswer(text){
 }
 
 
+
+function cleanCorrectWordFromAnswer(txt){
+  return removeServiceCorrectMarkerFromAnswerText(txt);
+}
+
+function cleanCorrectWordOnlyIfAnswerLine(line){
+  const s = String(line || '');
+  const t = typeof stripUnderlineMarkersForLogic === 'function'
+    ? stripUnderlineMarkersForLogic(s)
+    : s;
+
+  if(/^\s*([А-ЯA-ZІЇЄҐ])\s*[).:–-]/i.test(t)){
+    const m = t.match(/^(\s*[А-ЯA-ZІЇЄҐ]\s*[).:–-]\s*)([\s\S]*)$/i);
+    if(m) return m[1] + cleanCorrectWordFromAnswer(m[2]);
+  }
+
+  return s;
+}
+
+function removeCorrectAnswerMarksFromVisibleText(text){
+  return removeServiceCorrectMarkerOnlyAnswerLines(text);
+}
+
 function stripUnderlineMarkersForLogic(s){
   return String(s || '').replace(/\[\[U_START\]\]/g, '').replace(/\[\[U_END\]\]/g, '');
 }
 
 function isAnswerLine(line){
   const t = stripUnderlineMarkersForLogic(line);
-  return /^\s*([А-ЯA-ZІЇЄҐ])\s*[\)\.\:\-–]/i.test(String(t||''));
+  return /^\s*([А-ЯA-ZІЇЄҐ])\s*[).:–-]/i.test(String(t||''));
 }
 
 function normalizeConfusableLetters(s){
@@ -472,12 +495,12 @@ function normalizeConfusableLetters(s){
 function hasCorrectMarker(line){
   const raw = String(line||'');
   if(/(?:✅|✓|✔|\(\+\)|\s\+\s*$)/u.test(raw)) return true;
-  const n = normalizeConfusableLetters(raw).toLowerCase();
-  return /(правильн|вірн|correct)/u.test(n);
+  // Слово 'правильний' рахуємо маркером ТІЛЬКИ якщо воно стоїть у дужках.
+  return /[\(\[]\s*(?:правильн[а-яіїєґa-z]*|вірн[а-яіїєґa-z]*|correct)\s*[\)\]]/iu.test(raw);
 }
 
 function correctWordRegex(){
-  return /(правильн[а-яіїєґa-z]*|вірн[а-яіїєґa-z]*|correct|✅|✓|✔|\(\+\)|\s\+\s*$)/iu;
+  return /([\(\[]\s*(?:правильн[а-яіїєґa-z]*|вірн[а-яіїєґa-z]*|correct)\s*[\)\]]|✅|✓|✔|\(\+\)|\s\+\s*$)/iu;
 }
 function findExplicitAnswer(text){
   const lines = String(text||'').split('\n');
@@ -490,10 +513,10 @@ function findExplicitAnswer(text){
     if(isAnswerLine(t)) continue;
 
     // Окремий службовий рядок: "Правильна відповідь: Б", "Відповідь: В", "Answer: A"
-    let m = t.match(/^(?:правильн[а-яіїєґa-z]*\s*)?(?:відповідь|answer)\s*[:\-–]?\s*(?:варіант\s*)?([А-ЯA-ZІЇЄҐ])\s*[\)\.]?\s*$/iu);
+    let m = t.match(/^(?:правильн[а-яіїєґa-z]*\s*)?(?:відповідь|answer)\s*[:–-]?\s*(?:варіант\s*)?([А-ЯA-ZІЇЄҐ])\s*[\)\.]?\s*$/iu);
     if(m) return normalizeAnswerLabel(m[1]);
 
-    m = t.match(/^(?:правильн[а-яіїєґa-z]*|вірн[а-яіїєґa-z]*|correct)\s*(?:варіант)?\s*[:\-–]?\s*([А-ЯA-ZІЇЄҐ])\s*[\)\.]?\s*$/iu);
+    m = t.match(/^(?:правильн[а-яіїєґa-z]*|вірн[а-яіїєґa-z]*|correct)\s*(?:варіант)?\s*[:–-]?\s*([А-ЯA-ZІЇЄҐ])\s*[\)\.]?\s*$/iu);
     if(m) return normalizeAnswerLabel(m[1]);
 
     // Для рядка "правильна відповідь Б" без двокрапки
@@ -508,8 +531,8 @@ function removeExplicitAnswerLines(text){
   return String(text||'').split('\n').filter(line=>{
     const t=line.trim();
     if(isAnswerLine(t)) return true;
-    if(/^(?:правильн[а-яіїєґa-z]*\s*)?(?:відповідь|answer)\s*[:\-–]?\s*(?:варіант\s*)?[А-ЯA-ZІЇЄҐ]\s*[\)\.]?\s*$/iu.test(t)) return false;
-    if(/^(?:правильн[а-яіїєґa-z]*|вірн[а-яіїєґa-z]*|correct)\s*(?:варіант)?\s*[:\-–]?\s*[А-ЯA-ZІЇЄҐ]\s*[\)\.]?\s*$/iu.test(t)) return false;
+    if(/^(?:правильн[а-яіїєґa-z]*\s*)?(?:відповідь|answer)\s*[:–-]?\s*(?:варіант\s*)?[А-ЯA-ZІЇЄҐ]\s*[\)\.]?\s*$/iu.test(t)) return false;
+    if(/^(?:правильн[а-яіїєґa-z]*|вірн[а-яіїєґa-z]*|correct)\s*(?:варіант)?\s*[:–-]?\s*[А-ЯA-ZІЇЄҐ]\s*[\)\.]?\s*$/iu.test(t)) return false;
     return true;
   }).join('\n');
 }
@@ -526,9 +549,9 @@ function findCorrectWordAnswer(text){
 function stripCorrectMarkersFromLine(line){
   let s = String(line||'');
 
-  // Прибирає маркери відповіді з самого фото:
-  // "(правильний)", "(пpaвильний)", "правильно", "correct", "+", "✅"
-  s = s.replace(/\s*[\(\[]?\s*(?:правильн[а-яіїєґa-z]*|вірн[а-яіїєґa-z]*|correct)\s*[\)\]]?\s*/giu,' ');
+  // Прибирає маркери відповіді з самого фото.
+  // ВАЖЛИВО: текстові маркери прибираємо лише якщо вони в дужках: (правильний), [правильно]
+  s = s.replace(/\s*[\(\[]\s*(?:правильн[а-яіїєґa-z]*|вірн[а-яіїєґa-z]*|correct)\s*[\)\]]\s*/giu,' ');
   s = s.replace(/\s*(?:✅|✓|✔|\(\+\))\s*/gu,' ');
   s = s.replace(/\s+\+\s*$/u,'');
 
@@ -545,15 +568,40 @@ function cleanQuestionForDisplay(text, s){
   q = removeTextAfterAnswerBlock(q);
   return q.trim();
 }
+function questionStableKey(qText, index){
+  const raw = String(qText || '');
+  const first = raw.split('\n')[0] || '';
+  const m = first.match(/^\s*(\d{1,5})\s*[).:–-]/);
+  if(m) return 'n:' + m[1];
+  return 't:' + normalizeForCompare(raw).slice(0,140);
+}
+
 function prepareQuestions(){
   const s = getSettings();
+
+  // Зберігаємо ручний вибір формату відповідей перед повторним парсингом.
+  const oldLayout = new Map();
+  if(Array.isArray(questions)){
+    questions.forEach((q,i)=>{
+      if(q && q.answerLayout && q.answerLayout !== 'auto'){
+        oldLayout.set(questionStableKey(q.raw || q.text || '', i), q.answerLayout);
+      }
+    });
+  }
+
   const chunks = splitQuestions($('rawInput').value, s.splitMode);
-  questions = chunks.map(ch => {
+  questions = chunks.map((ch, idx) => {
     const chMain = removeTextAfterAnswerBlock(ch);
-    const ans = findExplicitAnswer(chMain) || (s.detectCorrectWord && findCorrectWordAnswer(chMain)) || (s.detectUnderline && findUnderlineAnswer(chMain)) || '';
+
+    // Для DOCX з підкресленою відповіддю підкреслення має пріоритет.
+    const ans = findExplicitAnswer(chMain) || (s.detectUnderline && findUnderlineAnswer(chMain)) || (s.detectCorrectWord && findCorrectWordAnswer(chMain)) || '';
     const clean = cleanQuestionForDisplay(ch, s);
-    return {raw: ch, text: clean, answer: ans};
+    const q = {raw: ch, text: clean, answer: ans};
+    const key = questionStableKey(ch, idx);
+    if(oldLayout.has(key)) q.answerLayout = oldLayout.get(key);
+    return q;
   }).filter(q => q.text);
+
   if(selectedIndex >= questions.length) selectedIndex = Math.max(0, questions.length-1);
   renderAll();
 }
@@ -573,14 +621,14 @@ function inlineOneWordAnswers(body, maxLetters=12){
     const t = stripUnderlineMarkersForLogic(String(lines[i]||'')).trim();
     if(!t) continue;
 
-    const m = t.match(/^([А-ЯA-ZІЇЄҐ])\s*[\)\.\:\-–]\s*(.+)$/i);
+    const m = t.match(/^([А-ЯA-ZІЇЄҐ])\s*[).:–-]\s*(.+)$/i);
     if(m){
       if(first < 0) first = i;
 
       const label = normalizeAnswerLabel(m[1]);
       const txt = String(m[2]||'')
-        .replace(/\s*\(правильн(ий|а|е|о|і)?\)\s*/giu,'')
-        .replace(/\s*правильн(ий|а|е|о|і)?\s*/giu,'')
+        .replace(/\s*[\(\[]\s*(?:правильн[а-яіїєґa-z]*|вірн[а-яіїєґa-z]*|correct)\s*[\)\]]\s*/giu,' ')
+        
         .replace(/[.;:!?…]+$/u,'')
         .trim();
 
@@ -658,19 +706,8 @@ function isAnswerMarkerLine(line){
   return /^\s*([АБВГҐДЕЄЖA-E])\s*[).:–-]\s*(.+)$/iu.test(String(t||''));
 }
 function answerSegmentsFromInlineLine(line){
-  const s = stripUnderlineMarkersForLogic(line);
-  const re = /(^|\s{1,})([АБВГҐДЕЄЖA-E])\s*[).:–-]\s*/giu;
-  const m = [...s.matchAll(re)];
-  if(m.length < 2) return null;
-  const out = [];
-  for(let i=0;i<m.length;i++){
-    const label = normalizeAnswerLabel(m[i][2]);
-    const start = m[i].index + m[i][0].length;
-    const end = (i+1 < m.length) ? m[i+1].index : s.length;
-    const txt = s.slice(start, end).trim();
-    if(label && txt) out.push({label, txt});
-  }
-  return out.length >= 2 ? out : null;
+  const parsed = safeSplitInlineAnswers(line);
+  return parsed ? parsed.answers : null;
 }
 function stripTailPunctForAnswer(txt){
   return String(txt || '').replace(/\s*[.;:!?…]+$/u, '').trim();
@@ -705,58 +742,23 @@ function splitAnswerLinesForLayout(body){
   const answers = [];
   const other = [];
 
-  // Finds answer markers inside one line: А) Б) В) Г) Д)
-  // Returns prefix before first answer marker + answer segments.
-  function splitInlineLine(line){
-    const raw = stripUnderlineMarkersForLogic(String(line || ''));
-    const re = /(^|\s)([АБВГҐДЕЄЖA-E])\s*[).:–-]\s*/giu;
-    const matches = [...raw.matchAll(re)];
-    if(matches.length < 2) return null;
-
-    const firstIndex = matches[0].index + (matches[0][1] ? matches[0][1].length : 0);
-    const prefix = raw.slice(0, firstIndex).trim();
-
-    const segs = [];
-    for(let i = 0; i < matches.length; i++){
-      const markerStart = matches[i].index + (matches[i][1] ? matches[i][1].length : 0);
-      const textStart = matches[i].index + matches[i][0].length;
-      const textEnd = (i + 1 < matches.length)
-        ? matches[i + 1].index
-        : raw.length;
-
-      const label = normalizeAnswerLabel(matches[i][2]);
-      const txt = String(raw.slice(textStart, textEnd) || '')
-        .replace(/\s*\(правильн(ий|а|е|о|і)?\)\s*/giu,'')
-        .replace(/\s*правильн(ий|а|е|о|і)?\s*/giu,'')
-        .replace(/[.;:!?…]+$/u,'')
-        .trim();
-
-      if(label && txt) segs.push({label, txt});
-    }
-
-    return segs.length >= 2 ? {prefix, answers: segs} : null;
-  }
-
   for(const line of lines){
-    const inline = splitInlineLine(line);
-
+    const inline = safeSplitInlineAnswers(line);
     if(inline){
       if(inline.prefix) other.push(inline.prefix);
       answers.push(...inline.answers);
       continue;
     }
 
-    const clean = stripUnderlineMarkersForLogic(String(line || '')).trim();
-    const m = clean.match(/^([А-ЯA-ZІЇЄҐ])\s*[\)\.\:\-–]\s*(.+)$/i);
+    const clean = (typeof stripUnderlineMarkersForLogic === 'function')
+      ? stripUnderlineMarkersForLogic(String(line || '')).trim()
+      : String(line || '').trim();
+
+    const m = clean.match(/^([А-ЯA-ZІЇЄҐ])\s*[).:–-]\s*(.+)$/i);
     if(m){
       const label = normalizeAnswerLabel(m[1]);
-      const txt = String(m[2] || '')
-        .replace(/\s*\(правильн(ий|а|е|о|і)?\)\s*/giu,'')
-        .replace(/\s*правильн(ий|а|е|о|і)?\s*/giu,'')
-        .replace(/[.;:!?…]+$/u,'')
-        .trim();
-
-      if(label && txt) answers.push({label, txt});
+      const txt = stripCorrectMarkerFromAnswerText(String(m[2] || '').replace(/[.;:!?…]+$/u,'').trim());
+      if(label && txt) answers.push({label, txt: removeServiceCorrectMarkerFromAnswerText(txt)});
       else other.push(line);
     }else{
       other.push(line);
@@ -815,6 +817,97 @@ function setQuestionLayoutMode(index, mode){
   renderAll();
 }
 
+
+/* --- SAFE CORRECT-MARKER / ANSWER PARSER FIX --- */
+function stripCorrectMarkerFromAnswerText(txt){
+  return removeServiceCorrectMarkerFromAnswerText(txt);
+}
+
+function stripCorrectMarkerOnlyInAnswerLines(text){
+  return removeServiceCorrectMarkerOnlyAnswerLines(text);
+}
+
+function safeAnswerMarkerRegex(){
+  // Requires answer marker like "А) " / "Б. " / "В: "
+  // It will not split normal words like "ймовірність", "рівноймовірних", "достовірність".
+  return /(^|\s+)([АБВГҐДЕЄЖA-E])\s*[).:–-]\s+(?=\S)/giu;
+}
+
+function safeSplitInlineAnswers(line){
+  const raw = (typeof stripUnderlineMarkersForLogic === 'function')
+    ? stripUnderlineMarkersForLogic(String(line || ''))
+    : String(line || '');
+
+  const re = safeAnswerMarkerRegex();
+  const matches = [...raw.matchAll(re)];
+  if(matches.length < 2) return null;
+
+  const firstMarkerIndex = matches[0].index + (matches[0][1] ? matches[0][1].length : 0);
+  const prefix = raw.slice(0, firstMarkerIndex).trim();
+
+  const answers = [];
+  for(let i = 0; i < matches.length; i++){
+    const textStart = matches[i].index + matches[i][0].length;
+    const textEnd = (i + 1 < matches.length) ? matches[i + 1].index : raw.length;
+    const label = normalizeAnswerLabel(matches[i][2]);
+    let txt = raw.slice(textStart, textEnd).trim();
+    txt = stripCorrectMarkerFromAnswerText(txt.replace(/[.;:!?…]+$/u, '').trim());
+    if(label && txt) answers.push({label, txt: removeServiceCorrectMarkerFromAnswerText(txt)});
+  }
+
+  return answers.length >= 2 ? {prefix, answers} : null;
+}
+
+function findUnderlinedAnswerLetterSafe(text){
+  const s = String(text || '');
+  const m = s.match(/\[\[U_START\]\]\s*([А-ЯA-ZІЇЄҐ])\s*[).:–-]/iu);
+  return m ? normalizeAnswerLabel(m[1]) : '';
+}
+
+function findCorrectWordAnswerLetterSafe(text){
+  const lines = String(text || '').split('\n');
+  for(const line of lines){
+    const raw = String(line || '');
+    const clean = typeof stripUnderlineMarkersForLogic === 'function' ? stripUnderlineMarkersForLogic(raw) : raw;
+    const m = clean.match(/^\s*([А-ЯA-ZІЇЄҐ])\s*[).:–-]\s*([\s\S]*)$/i);
+    if(!m) continue;
+    if(hasServiceCorrectMarkerInAnswerText(m[2])) return normalizeAnswerLabel(m[1]);
+  }
+  return '';
+}
+/* --- END SAFE FIX --- */
+
+
+/* --- hard safe removal of service marker only in answer variants --- */
+function removeServiceCorrectMarkerFromAnswerText(answerText){
+  return String(answerText || '')
+    // remove visible service marks exactly like: (правильний), (правильно), [правильна]
+    .replace(/\s*[\(\[]\s*правильн(?:ий|а|е|о|і|у|ою|им|ими|их|ого|ої)?\s*[\)\]]\s*/giu, ' ')
+    .replace(/\s*[\(\[]\s*вірн(?:ий|а|е|о|і|у|ою|им|ими|их|ого|ої)?\s*[\)\]]\s*/giu, ' ')
+    .replace(/[ \t]{2,}/g, ' ')
+    .trim();
+}
+
+function removeServiceCorrectMarkerOnlyAnswerLines(text){
+  return String(text || '').split('\n').map(line => {
+    const raw = String(line || '');
+    const check = (typeof stripUnderlineMarkersForLogic === 'function')
+      ? stripUnderlineMarkersForLogic(raw)
+      : raw;
+
+    const m = check.match(/^(\s*[А-ЯA-ZІЇЄҐ]\s*[).:–-]\s*)([\s\S]*)$/i);
+    if(!m) return raw; // питання/звичайний текст не чіпаємо
+
+    return m[1] + removeServiceCorrectMarkerFromAnswerText(m[2]);
+  }).join('\n');
+}
+
+function hasServiceCorrectMarkerInAnswerText(answerText){
+  const s = String(answerText || '');
+  return /[\(\[]\s*(?:правильн|вірн)(?:ий|а|е|о|і|у|ою|им|ими|их|ого|ої)?\s*[\)\]]/iu.test(s);
+}
+/* --- end hard safe removal --- */
+
 async function renderCanvas(q, canvas){
   const s=getSettings(); const dpr=1; const fontPt=s.fontSize; const fontPx=ptToPx(fontPt); const lineH=Math.round(fontPx*1.5); const margin=8; const pad=0;
   const canvasFont = `${fontPt}pt "Times New Roman", Times, serif`;
@@ -827,6 +920,7 @@ async function renderCanvas(q, canvas){
     body = applyManualAnswerLayout(body, manualMode, s.inlineMaxLetters);
   }
   body = addAnswerPunctuationForRender(body);
+  body = removeServiceCorrectMarkerOnlyAnswerLines(body);
   body = stripUnderlineMarkersForLogic(body);
   const parts=[];
   if(title) parts.push({type:'text', text:title, title:true});
@@ -912,6 +1006,104 @@ async function extractPDF(file){
   return pages.join('\n\n');
 }
 function xmlText(node){ return node.textContent || ''; }
+
+function localName(node){
+  return (node && node.localName) ? node.localName : String(node && node.nodeName || '').split(':').pop();
+}
+function firstChildByLocalName(node, name){
+  if(!node) return null;
+  for(const ch of node.children || []) if(localName(ch) === name) return ch;
+  return null;
+}
+function ommlToText(node){
+  if(!node) return '';
+  const name = localName(node);
+
+  if(name === 't') return (node.textContent || '').trim();
+
+  if(name === 'f'){
+    const num = ommlToText(firstChildByLocalName(node, 'num'));
+    const den = ommlToText(firstChildByLocalName(node, 'den'));
+    return '(' + num + ')/(' + den + ')';
+  }
+  if(name === 'sSup'){
+    return ommlToText(firstChildByLocalName(node,'e')) + '^(' + ommlToText(firstChildByLocalName(node,'sup')) + ')';
+  }
+  if(name === 'sSub'){
+    return ommlToText(firstChildByLocalName(node,'e')) + '_(' + ommlToText(firstChildByLocalName(node,'sub')) + ')';
+  }
+  if(name === 'sSubSup'){
+    return ommlToText(firstChildByLocalName(node,'e')) + '_(' + ommlToText(firstChildByLocalName(node,'sub')) + ')^(' + ommlToText(firstChildByLocalName(node,'sup')) + ')';
+  }
+  if(name === 'rad'){
+    const deg = ommlToText(firstChildByLocalName(node,'deg'));
+    const e = ommlToText(firstChildByLocalName(node,'e'));
+    return deg ? 'root[' + deg + '](' + e + ')' : '√(' + e + ')';
+  }
+  if(name === 'nary'){
+    const chr = node.querySelector('chr, m\\:chr');
+    let op = chr ? (chr.getAttribute('m:val') || chr.getAttribute('val') || '') : '';
+    if(!op) op = '∑';
+    const sub = ommlToText(firstChildByLocalName(node,'sub'));
+    const sup = ommlToText(firstChildByLocalName(node,'sup'));
+    const e = ommlToText(firstChildByLocalName(node,'e'));
+    return op + (sub ? '_(' + sub + ')' : '') + (sup ? '^(' + sup + ')' : '') + ' ' + e;
+  }
+  if(name === 'd'){
+    return '(' + ommlToText(firstChildByLocalName(node,'e')) + ')';
+  }
+  if(name === 'func'){
+    return ommlToText(firstChildByLocalName(node,'fName')) + '(' + ommlToText(firstChildByLocalName(node,'e')) + ')';
+  }
+
+  const parts = [];
+  for(const ch of node.childNodes || []){
+    if(ch.nodeType === 3){
+      const t = String(ch.nodeValue || '').trim();
+      if(t) parts.push(t);
+    }else if(ch.nodeType === 1){
+      const t = ommlToText(ch);
+      if(t) parts.push(t);
+    }
+  }
+  return parts.join(' ').replace(/\s+/g,' ').replace(/\s+([,.;:!?])/g,'$1').trim();
+}
+function replaceOmmlFormulasWithText(xmlString){
+  try{
+  const parser = new DOMParser();
+  const xml = parser.parseFromString(xmlString, 'application/xml');
+
+  const all = [
+    ...xml.getElementsByTagName('m:oMathPara'),
+    ...xml.getElementsByTagName('m:oMath')
+  ];
+
+  for(const f of all){
+    if(!f.parentNode) continue;
+    if(localName(f) === 'oMath' && localName(f.parentNode) === 'oMathPara') continue;
+
+    const text = ommlToText(f);
+    const r = xml.createElementNS('http://schemas.openxmlformats.org/wordprocessingml/2006/main', 'w:r');
+    const t = xml.createElementNS('http://schemas.openxmlformats.org/wordprocessingml/2006/main', 'w:t');
+    t.textContent = text ? ' ' + text + ' ' : ' ';
+    r.appendChild(t);
+    f.parentNode.replaceChild(r, f);
+  }
+
+  return new XMLSerializer().serializeToString(xml);
+  }catch(e){
+    console.warn('OMML formula conversion skipped:', e);
+    return xmlString;
+  }
+}
+function cleanFormulaTextAfterDocx(text){
+  return String(text || '')
+    .replace(/\[\s*\]/g, '')
+    .replace(/\s+([,.;:!?])/g, '$1')
+    .replace(/[ \t]{2,}/g, ' ')
+    .trim();
+}
+
 async function extractDOCX(file){
   if(!window.JSZip) throw new Error('JSZip не завантажився. Перевір інтернет.');
   imageStore=Object.create(null);
@@ -930,7 +1122,7 @@ async function extractDOCX(file){
     const url=URL.createObjectURL(blob); lastObjectUrls.push(url); imageStore[name]=url; rels[rid]='__IMG__'+name;
   }
   const xml=await zip.file('word/document.xml')?.async('text'); if(!xml) throw new Error('Не знайдено word/document.xml у DOCX.');
-  const doc=new DOMParser().parseFromString(xml,'application/xml');
+  const doc=new DOMParser().parseFromString(xml, 'application/xml');
   const nsW='http://schemas.openxmlformats.org/wordprocessingml/2006/main';
   const nsA='http://schemas.openxmlformats.org/drawingml/2006/main';
   const nsR='http://schemas.openxmlformats.org/officeDocument/2006/relationships';
